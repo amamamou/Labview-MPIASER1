@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Camera, Mail, MapPin, Phone } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 export default function Profile() {
   const [isEditing, setIsEditing] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [profile, setProfile] = useState({
     name: "John Doe",
     email: "john@example.com",
@@ -15,9 +16,40 @@ export default function Profile() {
     role: "Energy Manager",
     bio: "Passionate about renewable energy optimization and sustainable practices.",
   })
+  const [formData, setFormData] = useState<typeof profile | null>(null)
 
   const handleChange = (field: string, value: string) => {
-    setProfile({ ...profile, [field]: value })
+    // update local form state while editing
+    if (formData) {
+      setFormData({ ...formData, [field]: value })
+    }
+  }
+
+  useEffect(() => {
+    // load user profile from localStorage (same behavior as /profile)
+    const authData = localStorage.getItem("user_profile")
+    if (!authData) {
+      // not authenticated -> redirect to signin
+      window.location.href = "/auth/signin"
+      return
+    }
+    try {
+      const data = JSON.parse(authData)
+      setProfile(data)
+      setFormData(data)
+      setIsAuthenticated(true)
+    } catch (e) {
+      // if parsing fails, redirect to signin to re-auth
+      window.location.href = "/auth/signin"
+    }
+  }, [])
+
+  const handleSave = () => {
+    if (!formData) return
+    localStorage.setItem("user_profile", JSON.stringify(formData))
+    setProfile(formData)
+    setIsEditing(false)
+    alert("Profile updated successfully!")
   }
 
   return (
@@ -49,14 +81,30 @@ export default function Profile() {
 
         {/* Personal Information */}
         <div className="p-6 bg-card rounded-2xl border border-border">
-          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
             <h2 className="font-semibold text-lg">Personal Information</h2>
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="text-primary hover:underline text-sm font-medium"
-            >
-              {isEditing ? "Done" : "Edit"}
-            </button>
+            <div className="flex items-center gap-4">
+              {isEditing && (
+                <button
+                  onClick={handleSave}
+                  className="text-sm font-medium px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition"
+                >
+                  Save
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // toggle edit mode; if cancelling, reset formData to profile
+                  if (isEditing && formData) {
+                    setFormData(profile)
+                  }
+                  setIsEditing(!isEditing)
+                }}
+                className="text-primary hover:underline text-sm font-medium"
+              >
+                {isEditing ? "Done" : "Edit"}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -65,7 +113,7 @@ export default function Profile() {
                 <label className="block text-sm font-medium mb-2">Full Name</label>
                 <input
                   type="text"
-                  value={profile.name}
+                  value={formData?.name || ""}
                   onChange={(e) => handleChange("name", e.target.value)}
                   disabled={!isEditing}
                   className="w-full px-4 py-2 bg-input border border-border rounded-lg disabled:opacity-50"
@@ -75,7 +123,7 @@ export default function Profile() {
                 <label className="block text-sm font-medium mb-2">Role</label>
                 <input
                   type="text"
-                  value={profile.role}
+                  value={formData?.role || ""}
                   onChange={(e) => handleChange("role", e.target.value)}
                   disabled={!isEditing}
                   className="w-full px-4 py-2 bg-input border border-border rounded-lg disabled:opacity-50"
@@ -89,7 +137,7 @@ export default function Profile() {
                 <Mail className="w-4 h-4 text-muted-foreground" />
                 <input
                   type="email"
-                  value={profile.email}
+                  value={formData?.email || ""}
                   onChange={(e) => handleChange("email", e.target.value)}
                   disabled={!isEditing}
                   className="flex-1 bg-transparent disabled:opacity-50 outline-none"
@@ -104,7 +152,7 @@ export default function Profile() {
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <input
                     type="tel"
-                    value={profile.phone}
+                    value={formData?.phone || ""}
                     onChange={(e) => handleChange("phone", e.target.value)}
                     disabled={!isEditing}
                     className="flex-1 bg-transparent disabled:opacity-50 outline-none"
@@ -117,7 +165,7 @@ export default function Profile() {
                   <MapPin className="w-4 h-4 text-muted-foreground" />
                   <input
                     type="text"
-                    value={profile.location}
+                    value={formData?.location || ""}
                     onChange={(e) => handleChange("location", e.target.value)}
                     disabled={!isEditing}
                     className="flex-1 bg-transparent disabled:opacity-50 outline-none"
@@ -130,7 +178,7 @@ export default function Profile() {
               <label className="block text-sm font-medium mb-2">Company</label>
               <input
                 type="text"
-                value={profile.company}
+                value={formData?.company || ""}
                 onChange={(e) => handleChange("company", e.target.value)}
                 disabled={!isEditing}
                 className="w-full px-4 py-2 bg-input border border-border rounded-lg disabled:opacity-50"
@@ -140,7 +188,7 @@ export default function Profile() {
             <div>
               <label className="block text-sm font-medium mb-2">Bio</label>
               <textarea
-                value={profile.bio}
+                value={formData?.bio || ""}
                 onChange={(e) => handleChange("bio", e.target.value)}
                 disabled={!isEditing}
                 className="w-full px-4 py-2 bg-input border border-border rounded-lg disabled:opacity-50 resize-none h-24"

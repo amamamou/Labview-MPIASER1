@@ -56,16 +56,17 @@ export function Navbar() {
             <Link href="/" className="text-sm font-light hover:text-primary transition-colors">
               Home
             </Link>
-            {isAuthenticated && (
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-1.5 text-sm font-light hover:text-primary transition-colors"
-              >
-                Dashboard
-              </Link>
-            )}
             <Link href="/about" className="text-sm font-light hover:text-primary transition-colors">
               About
+            </Link>
+            <Link href="/blog" className="text-sm font-light hover:text-primary transition-colors">
+              Blog
+            </Link>
+            <Link href="/faq" className="text-sm font-light hover:text-primary transition-colors">
+              FAQ
+            </Link>
+            <Link href="/contactus" className="text-sm font-light hover:text-primary transition-colors">
+              Contact Us
             </Link>
           </div>
 
@@ -103,9 +104,9 @@ export function Navbar() {
                   <span className="text-sm font-light">{userProfile.name}</span>
                 </div>
                 <Link
-                  href="/profile"
+                  href="/dashboard"
                   className="p-1.5 rounded-lg hover:bg-muted hover:scale-110 transition-all"
-                  aria-label="Profile"
+                  aria-label="Dashboard"
                 >
                   <User className="w-4 h-4" />
                 </Link>
@@ -164,6 +165,24 @@ export function Navbar() {
             >
               About
             </Link>
+            <Link
+              href="/blog"
+              className="block px-4 py-2 text-sm font-light hover:bg-muted rounded-lg transition-colors"
+            >
+              Blog
+            </Link>
+            <Link
+              href="/faq"
+              className="block px-4 py-2 text-sm font-light hover:bg-muted rounded-lg transition-colors"
+            >
+              FAQ
+            </Link>
+            <Link
+              href="/contactus"
+              className="block px-4 py-2 text-sm font-light hover:bg-muted rounded-lg transition-colors"
+            >
+              Contact Us
+            </Link>
             <div className="pt-2 border-t border-border">
               {isAuthenticated && userProfile ? (
                 <>
@@ -176,10 +195,10 @@ export function Navbar() {
                     <span className="text-sm font-light">{userProfile.name}</span>
                   </div>
                   <Link
-                    href="/profile"
+                    href="/dashboard"
                     className="block px-4 py-2 text-sm font-light hover:bg-muted rounded-lg transition-colors"
                   >
-                    Profile
+                    Dashboard
                   </Link>
                   <button
                     onClick={handleLogout}
