@@ -2,7 +2,6 @@
 import { useTheme } from "next-themes"
 import { Moon, Sun, Monitor, Bell, Lock, Database } from "lucide-react"
 import { useState, useEffect } from "react"
-import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 export default function Settings() {
   const { theme, setTheme } = useTheme()
@@ -15,15 +14,13 @@ export default function Settings() {
   if (!mounted) return null
 
   return (
-      <div className="min-h-screen bg-background">
-      <Navbar />
     <div className="p-4 md:p-8 space-y-8">
       <div>
         <h1 className="text-3xl font-bold mb-2">Settings</h1>
         <p className="text-muted-foreground">Customize your experience and preferences</p>
       </div>
 
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-6xl space-y-6">
         {/* Theme Settings */}
         <div className="p-6 bg-card rounded-2xl border border-border">
           <h2 className="font-semibold text-lg mb-6 flex items-center gap-2">
@@ -116,7 +113,5 @@ export default function Settings() {
         </div>
       </div>
     </div>
-<Footer />
-  </div>
   )
 }

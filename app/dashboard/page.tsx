@@ -17,7 +17,6 @@ import {
   BarChart3,
 } from "lucide-react"
 import Link from "next/link"
-import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import {
   LineChart,
@@ -31,6 +30,19 @@ import {
   Pie,
   Cell,
 } from "recharts"
+import { Line as ChartJSLine } from "react-chartjs-2"
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip as ChartJSTooltip,
+  Legend,
+} from "chart.js"
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartJSTooltip, Legend)
 
 const energySources = [
   { id: "1", name: "Solar Farm Alpha", type: "Solar", power: "2,458 kW", trend: "+12%", icon: Sun, color: "#fbbf24" },
@@ -87,6 +99,9 @@ export default function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
+  const [solarProduction, setSolarProduction] = useState(0)
+  const [batteryLevel, setBatteryLevel] = useState(0)
+  const [valveState, setValveState] = useState(false)
 
   useEffect(() => {
     const authData = localStorage.getItem("user_profile")
@@ -97,6 +112,24 @@ export default function Dashboard() {
     }
   }, [router])
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (valveState && solarProduction > 0) {
+      interval = setInterval(() => {
+        setBatteryLevel((prev) => Math.min(prev + solarProduction * 0.1, 100))
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [valveState, solarProduction])
+
+  const handleSolarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSolarProduction(Number(event.target.value))
+  }
+
+  const toggleValve = () => {
+    setValveState((prev) => !prev)
+  }
+
   const filteredSources = energySources.filter(
     (source) =>
       source.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -106,10 +139,7 @@ export default function Dashboard() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-in-up">
           <h1 className="text-5xl md:text-6xl font-light mb-3 text-foreground">Energy Dashboard</h1>
@@ -268,9 +298,81 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
 
-      <Footer />
+        {/* Simulation Section */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-light mb-6 flex items-center gap-2 animate-fade-in-up">
+            <Zap className="w-6 h-6 text-primary" /> Simulation du Système
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-6 bg-card border border-border rounded-xl animate-fade-in-up">
+              <label className="text-sm font-light text-muted-foreground mb-2 block">Production Solaire</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={solarProduction}
+                onChange={handleSolarChange}
+                className="w-full h-2 bg-primary rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-xs font-light text-muted-foreground mt-1">
+                <span>0</span>
+                <span>100</span>
+              </div>
+            </div>
+
+            <div className="p-6 bg-card border border-border rounded-xl animate-fade-in-up">
+              <label className="text-sm font-light text-muted-foreground mb-2 block">Niveau de Batterie</label>
+              <div className="h-2 bg-primary rounded-lg overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary to-accent"
+                  style={{ height: `${batteryLevel}%`, transition: "height 0.5s ease-in-out" }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs font-light text-muted-foreground mt-1">
+                <span>0%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            <div className="p-6 bg-card border border-border rounded-xl animate-fade-in-up">
+              <label className="text-sm font-light text-muted-foreground mb-2 block">Valve Électrique</label>
+              <button
+                onClick={toggleValve}
+                className={`w-full py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                  valveState ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                }`}
+              >
+                {valveState ? "ON" : "OFF"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="charts mb-12">
+          <h2 className="text-2xl font-light mb-6 flex items-center gap-2 animate-fade-in-up">
+            <Zap className="w-6 h-6 text-primary" /> Graphiques
+          </h2>
+          <ChartJSLine
+            data={{
+              labels: Array.from({ length: 10 }, (_, i) => `T${i + 1}`),
+              datasets: [
+                {
+                  label: "Production Solaire",
+                  data: Array(10).fill(solarProduction),
+                  borderColor: "rgba(75, 192, 192, 1)",
+                  fill: false,
+                },
+                {
+                  label: "Niveau de Batterie",
+                  data: Array(10).fill(batteryLevel),
+                  borderColor: "rgba(153, 102, 255, 1)",
+                  fill: false,
+                },
+              ],
+            }}
+          />
+        </div>
     </div>
   )
 }

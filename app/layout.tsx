@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import ChatbotComponent from "@/components/chatbot-component"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -11,7 +12,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Labview-MPIASER | Renewable Energy Platform",
   description: "Monitor and manage renewable energy resources with advanced analytics and insights",
-  generator: "v0.app",
   icons: {
     icon: [
       {
@@ -41,6 +41,7 @@ export default function RootLayout({
       <body suppressHydrationWarning className={`font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
+          <ChatbotComponent />
         </ThemeProvider>
         <Analytics />
       </body>

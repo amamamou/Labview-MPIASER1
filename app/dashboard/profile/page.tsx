@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Camera, Mail, MapPin, Phone } from "lucide-react"
-import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 export default function Profile() {
   const [isEditing, setIsEditing] = useState(false)
@@ -53,15 +52,13 @@ export default function Profile() {
   }
 
   return (
-      <div className="min-h-screen bg-background">
-      <Navbar />
     <div className="p-4 md:p-8 space-y-8">
       <div>
         <h1 className="text-3xl font-bold mb-2">Profile</h1>
         <p className="text-muted-foreground">Manage your account information</p>
       </div>
 
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-6xl space-y-6">
         {/* Avatar Section */}
         <div className="p-6 bg-card rounded-2xl border border-border">
           <div className="flex items-center justify-between mb-4">
@@ -216,8 +213,6 @@ export default function Profile() {
           </div>
         </div>
       </div>
-    </div>
-<Footer />
     </div>
   )
 }

@@ -14,7 +14,6 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { Download } from "lucide-react"
-import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 const csvData = [
   { date: "2025-01-01", solar: 1240, wind: 1850, hydro: 980, efficiency: 94.2 },
@@ -28,8 +27,6 @@ export default function DataPage() {
   const [filter, setFilter] = useState("week")
 
   return (
-      <div className="min-h-screen bg-background">
-      <Navbar />
     <div className="p-4 md:p-8 space-y-8">
       <div className="flex items-center justify-between">
         <div>
@@ -117,8 +114,6 @@ export default function DataPage() {
           </tbody>
         </table>
       </div>
-    </div>
-<Footer />
     </div>
   )
 }

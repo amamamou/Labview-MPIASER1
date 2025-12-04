@@ -1,6 +1,7 @@
+"use client"
 import type React from "react"
 import { Sidebar } from "@/components/sidebar"
-import { Navbar } from "@/components/navbar"
+import { DashboardNavbar } from "@/components/dashboard-navbar"
 
 export default function DashboardLayout({
   children,
@@ -8,11 +9,20 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 lg:ml-0">{children}</main>
-      </div>
+    <div className="flex">
+      {/* FIXED SIDEBAR */}
+      <Sidebar />
+
+      {/* MAIN CONTENT WITH NAVBAR */}
+      <main className="flex-1 h-screen overflow-y-auto bg-background flex flex-col">
+        {/* NAVBAR */}
+        <DashboardNavbar />
+
+        {/* SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }
