@@ -97,7 +97,8 @@ Tu réponds toujours en français.`,
           <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
           <circle cx="8" cy="11" r="1.4" fill="currentColor" />
           <circle cx="16" cy="11" r="1.4" fill="currentColor" />
-          <rect x="10" y="14" width="4" height="1.2" rx="0.6" fill="currentColor" />
+          {/* Smiling mouth */}
+          <path d="M10 14.5C10 14.5 12 16 14 14.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
           <rect x="6" y="4" width="3" height="2" rx="0.5" fill="currentColor" />
           <rect x="15" y="4" width="3" height="2" rx="0.5" fill="currentColor" />
         </svg>

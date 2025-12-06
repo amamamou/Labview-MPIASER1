@@ -5,7 +5,33 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-    domains: ["images.unsplash.com", "source.unsplash.com"],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'source.unsplash.com',
+      },
+    ],
+  },
+  experimental: {
+    turbo: false,
+  },
+  webpack: (config) => {
+    config.cache = {
+      type: 'filesystem',
+      cacheDirectory: '.next/cache',
+      hashAlgorithm: 'md4',
+      name: 'webpack-cache',
+      period: 60000,
+      store: 'pack',
+      buildDependencies: {
+        config: ['next.config.mjs'],
+      },
+    };
+    return config;
   },
 }
 
