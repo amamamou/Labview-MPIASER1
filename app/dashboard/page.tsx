@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -124,6 +125,14 @@ interface ChartPoint {
   soc: number
 }
 
+// KPIs derived from the time series
+interface KpiState {
+  totalPowerKw: number
+  todaysOutputKWh: number
+  efficiencyPct: number
+  carbonSavedTons: number
+}
+
 // ----------------- HELPERS -----------------
 function getBatteryAdvice(soc: number) {
   if (soc < 5) {
@@ -156,6 +165,40 @@ function getBatteryAdvice(soc: number) {
       description: "Batterie presque pleine. Vous pouvez planifier des charges intensives ou stocker l’excès d’énergie.",
       pillClass: "bg-green-500/10 text-green-500 border-green-500/40",
     }
+  }
+}
+
+/**
+ * Compute KPIs from one-day time series:
+ * points.solar -> solar_power_W
+ * points.load  -> load_power_W
+ * points.soc   -> battery_soc_pct
+ */
+function computeKpisFromPoints(points: ChartPoint[]): KpiState | null {
+  if (!points.length) return null
+
+  const solarValues = points.map((p) => p.solar)
+  const loadValues = points.map((p) => p.load)
+
+  const solarSumW = solarValues.reduce((acc, v) => acc + (isNaN(v) ? 0 : v), 0)
+  const loadSumW = loadValues.reduce((acc, v) => acc + (isNaN(v) ? 0 : v), 0)
+  const maxSolarW = Math.max(...solarValues, 0)
+
+  // Assuming approximate 1 sample per hour → kWh ≈ sum(W) / 1000
+  const todaysOutputKWh = solarSumW / 1000
+  const totalPowerKw = maxSolarW / 1000
+
+  const efficiencyPct =
+    solarSumW > 0 ? Math.max(0, Math.min(100, (loadSumW / solarSumW) * 100)) : 0
+
+  // simple carbon factor: 0.0007 tons CO₂ / kWh (adjust as you like)
+  const carbonSavedTons = todaysOutputKWh * 0.0007
+
+  return {
+    totalPowerKw,
+    todaysOutputKWh,
+    efficiencyPct,
+    carbonSavedTons,
   }
 }
 
@@ -196,7 +239,6 @@ function parseCsvForChart(csvText: string): ChartPoint[] {
     if (!row) continue
 
     const cols = row.split(/[;,]/)
-
     if (cols.length < headerCols.length) continue
 
     const timeRaw = cols[timeIdx]?.trim()
@@ -210,7 +252,7 @@ function parseCsvForChart(csvText: string): ChartPoint[] {
     const load = parseFloat(loadRaw || "0")
     const soc = parseFloat(socRaw || "0")
 
-    // try to extract "HH:MM" from time string
+    // extract HH:MM if possible
     let timeLabel = timeRaw
     const match = timeRaw.match(/\d{2}:\d{2}/)
     if (match) {
@@ -236,30 +278,36 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
 
-  const [solarProduction, setSolarProduction] = useState(0) // 0–100 (slider, synced from CSV last line)
+  const [solarProduction, setSolarProduction] = useState(0) // 0–100
   const [batteryLevel, setBatteryLevel] = useState(0) // 0–100 (%)
   const [valveState, setValveState] = useState(false)
 
-  // CSV upload states
+  // CSV upload & prediction
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvPrediction, setCsvPrediction] = useState<BatteryCsvResponse | null>(null)
   const [csvLoading, setCsvLoading] = useState(false)
   const [csvError, setCsvError] = useState<string | null>(null)
 
-  // fake progress (0 -> 100) while uploading/predicting
+  // fake progress
   const [uploadProgress, setUploadProgress] = useState(0)
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // ref for file input (to clear its value)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  // Modal for CSV result
   const [showCsvModal, setShowCsvModal] = useState(false)
 
   // 24h chart series / source
   const [chartSeries, setChartSeries] = useState<any[]>(defaultChartData)
   const [chartSource, setChartSource] = useState<"static" | "csv">("static")
 
+  // KPIs (dynamic once file is parsed)
+  const [kpis, setKpis] = useState<KpiState>({
+    totalPowerKw: 9728,
+    todaysOutputKWh: 156432,
+    efficiencyPct: 94.2,
+    carbonSavedTons: 2.4,
+  })
+
+  // auth
   useEffect(() => {
     const authData = localStorage.getItem("user_profile")
     if (!authData) {
@@ -278,7 +326,7 @@ export default function Dashboard() {
     }
   }, [chartSource])
 
-  // sync batteryLevel + solarProduction from last prediction line
+  // sync battery & slider with last prediction
   useEffect(() => {
     if (csvPrediction) {
       const soc = Math.max(0, Math.min(100, csvPrediction.prediction.battery_soc_pct))
@@ -315,7 +363,7 @@ export default function Dashboard() {
       source.type.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
-  // file change handler
+  // file change
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null
     setCsvFile(file)
@@ -333,6 +381,12 @@ export default function Dashboard() {
     setShowCsvModal(false)
     setChartSeries(defaultChartData)
     setChartSource("static")
+    setKpis({
+      totalPowerKw: 9728,
+      todaysOutputKWh: 156432,
+      efficiencyPct: 94.2,
+      carbonSavedTons: 2.4,
+    })
 
     if (progressTimerRef.current) {
       clearInterval(progressTimerRef.current)
@@ -372,7 +426,7 @@ export default function Dashboard() {
     setUploadProgress(success ? 100 : uploadProgress)
   }
 
-  // upload CSV/Excel to backend + parse same file on frontend for chart
+  // upload CSV/Excel to backend + parse same file on frontend for chart & KPIs
   const uploadCsvAndPredict = async () => {
     if (!csvFile) {
       setCsvError("Please select a CSV or Excel file first.")
@@ -385,54 +439,43 @@ export default function Dashboard() {
       startFakeProgress()
 
       const fileName = csvFile.name.toLowerCase()
+      let points: ChartPoint[] = []
 
-      // --- FRONTEND PARSING FOR 24H CHART ---
+      // --- FRONTEND PARSING FOR 24H CHART & KPIs ---
       if (fileName.endsWith(".csv")) {
         const text = await csvFile.text()
-        const parsed = parseCsvForChart(text)
-        if (parsed && parsed.length > 0) {
-          // convert ChartPoint[] to Recharts data (add dummy wind/hydro if needed)
-          const rechartsData = parsed.map((p) => ({
-            time: p.time,
-            solar: p.solar,
-            wind: p.load, // you can change this mapping
-            hydro: p.soc, // you can change this mapping
-          }))
-          setChartSeries(rechartsData)
-          setChartSource("csv")
-          console.log("[24h Chart] Using CSV data parsed on frontend for 24h chart.", rechartsData)
-        } else {
-          console.log("[24h Chart] Keeping static demo data (CSV parse produced no points).")
-        }
+        points = parseCsvForChart(text)
       } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
         try {
           const buffer = await csvFile.arrayBuffer()
           const workbook = XLSX.read(buffer, { type: "array" })
           const firstSheetName = workbook.SheetNames[0]
           const worksheet = workbook.Sheets[firstSheetName]
-
           const csvText = XLSX.utils.sheet_to_csv(worksheet)
-          const parsed = parseCsvForChart(csvText)
-
-          if (parsed && parsed.length > 0) {
-            const rechartsData = parsed.map((p) => ({
-              time: p.time,
-              solar: p.solar,
-              wind: p.load,
-              hydro: p.soc,
-            }))
-            setChartSeries(rechartsData)
-            setChartSource("csv")
-            console.log("[24h Chart] Using Excel data (converted to CSV) for 24h chart.", rechartsData)
-          } else {
-            console.log("[24h Chart] Excel parsed but produced no chart points; keeping static demo data.")
-          }
+          points = parseCsvForChart(csvText)
         } catch (e) {
           console.error("[24h Chart] Error parsing Excel file on frontend:", e)
-          console.log("[24h Chart] Keeping static demo data (Excel parse failed).")
+        }
+      }
+
+      if (points && points.length > 0) {
+        const rechartsData = points.map((p) => ({
+          time: p.time,
+          solar: p.solar,
+          wind: p.load,
+          hydro: p.soc,
+        }))
+        setChartSeries(rechartsData)
+        setChartSource("csv")
+        console.log("[24h Chart] Using parsed file data for 24h chart.", rechartsData)
+
+        const k = computeKpisFromPoints(points)
+        if (k) {
+          setKpis(k)
+          console.log("[KPI] Computed from CSV/Excel:", k)
         }
       } else {
-        console.log("[24h Chart] Unsupported file type for chart, keeping static demo data.")
+        console.log("[24h Chart] No points parsed, keeping static chart & KPIs.")
       }
 
       // --- BACKEND CALL /predict_csv FOR LAST LINE PREDICTION ---
@@ -467,7 +510,6 @@ export default function Dashboard() {
 
   if (!isAuthenticated) return null
 
-  // SOC used for advice
   const socValue = csvPrediction ? csvPrediction.prediction.battery_soc_pct : batteryLevel
   const advice = getBatteryAdvice(socValue)
 
@@ -504,10 +546,34 @@ export default function Dashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
         {[
-          { label: "Total Power", value: "9,728 kW", change: "+9%", icon: Zap, color: "from-primary" },
-          { label: "Today's Output", value: "156,432 kWh", change: "+12%", icon: TrendingUp, color: "from-accent" },
-          { label: "Efficiency", value: "94.2%", change: "+2%", icon: Activity, color: "from-blue-500" },
-          { label: "Carbon Saved", value: "2.4 Tons", change: "+5%", icon: Leaf, color: "from-green-500" },
+          {
+            label: "Total Power",
+            value: `${kpis.totalPowerKw.toFixed(1)} kW`,
+            change: "+9%",
+            icon: Zap,
+            color: "from-primary",
+          },
+          {
+            label: "Today's Output",
+            value: `${kpis.todaysOutputKWh.toFixed(0)} kWh`,
+            change: "+12%",
+            icon: TrendingUp,
+            color: "from-accent",
+          },
+          {
+            label: "Efficiency",
+            value: `${kpis.efficiencyPct.toFixed(1)}%`,
+            change: "+2%",
+            icon: Activity,
+            color: "from-blue-500",
+          },
+          {
+            label: "Carbon Saved",
+            value: `${kpis.carbonSavedTons.toFixed(2)} Tons`,
+            change: "+5%",
+            icon: Leaf,
+            color: "from-green-500",
+          },
         ].map((kpi, i) => (
           <div
             key={i}
@@ -520,7 +586,9 @@ export default function Dashboard() {
               >
                 <kpi.icon className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-xs font-light text-primary bg-primary/10 px-2 py-1 rounded">{kpi.change}</span>
+              <span className="text-xs font-light text-primary bg-primary/10 px-2 py-1 rounded">
+                {kpi.change}
+              </span>
             </div>
             <p className="text-muted-foreground text-sm font-light mb-1">{kpi.label}</p>
             <p className="text-2xl font-light text-foreground">{kpi.value}</p>
@@ -595,59 +663,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Energy sources */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-light mb-6 flex items-center gap-2 animate-fade-in-up">
-          <Zap className="w-6 h-6 text-primary" /> Energy Sources
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredSources.map((source, i) => (
-            <Link
-              key={source.id}
-              href={`/dashboard/source/${source.id}`}
-              onClick={() => setSelectedSource(source.id)}
-              className={`p-6 bg-card border rounded-xl cursor-pointer transition-all hover:scale-105 hover:shadow-lg animate-fade-in-up group ${
-                selectedSource === source.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-              }`}
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 rounded-lg bg-gradient-to-br from-transparent to-primary/10 group-hover:scale-110 transition-transform">
-                  <source.icon className="w-6 h-6" style={{ color: source.color }} />
-                </div>
-                <div className="text-xs font-light text-primary bg-primary/10 px-2 py-1 rounded">{source.type}</div>
-              </div>
-              <h3 className="font-light text-lg mb-1">{source.name}</h3>
-              <p className="text-muted-foreground text-sm font-light mb-4">{source.power} output</p>
-              <div className="flex items-center justify-between">
-                <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden mr-3">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent animate-pulse-glow"
-                    style={{ width: "75%" }}
-                  ></div>
-                </div>
-                <span className="text-sm font-light text-primary whitespace-nowrap flex items-center gap-1">
-                  <ArrowUpRight className="w-4 h-4" /> {source.trend}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-        {filteredSources.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground font-light animate-fade-in-up">
-            <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            No energy sources found matching "{searchQuery}"
-          </div>
-        )}
-      </div>
-
       {/* Simulation Section */}
       <div className="mb-12">
         <h2 className="text-2xl font-light mb-6 flex items-center gap-2 animate-fade-in-up">
           <Zap className="w-6 h-6 text-primary" /> Simulation du Système
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Solar production slider (synced from CSV last line) */}
+          {/* Solar production slider */}
           <div className="p-6 bg-card border border-border rounded-xl animate-fade-in-up">
             <label className="text-sm font-light text-muted-foreground mb-2 block">Production Solaire</label>
             <input
@@ -715,6 +737,21 @@ export default function Dashboard() {
             {csvError && <p className="mt-2 text-xs text-red-500">{csvError}</p>}
           </div>
 
+          {/* Valve */}
+          <div className="p-6 bg-card border border-border rounded-xl flex flex-col gap-3 animate-fade-in-up">
+            <label className="text-sm font-light text-muted-foreground mb-2 block">Valve Électrique</label>
+            <button
+              onClick={toggleValve}
+              className={`w-full py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                valveState ? "bg-green-500 text-white" : "bg-red-500 text-white"
+              }`}
+            >
+              {valveState ? "ON" : "OFF"}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              Le niveau de batterie et la production solaire sont synchronisés avec la dernière prédiction.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -766,6 +803,8 @@ export default function Dashboard() {
           {csvError && <p className="text-sm text-red-500">{csvError}</p>}
         </div>
       </div>
+
+      {/* Modal for CSV prediction */}
       {showCsvModal && csvPrediction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-xl p-6 relative">
