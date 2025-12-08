@@ -47,6 +47,9 @@ import * as XLSX from "xlsx"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartJSTooltip, Legend)
 
+// --------- LOCAL STORAGE KEY ----------
+const STORAGE_KEY = "energy_dashboard_state_v1"
+
 // ----------------- STATIC DATA / TYPES -----------------
 const energySources = [
   { id: "1", name: "Solar Farm Alpha", type: "Solar", power: "2,458 kW", trend: "+12%", icon: Sun, color: "#fbbf24" },
@@ -131,6 +134,16 @@ interface KpiState {
   todaysOutputKWh: number
   efficiencyPct: number
   carbonSavedTons: number
+}
+
+// For restoring from localStorage
+interface StoredDashboardState {
+  chartSeries: any[]
+  chartSource: "static" | "csv"
+  kpis: KpiState
+  csvPrediction: BatteryCsvResponse | null
+  batteryLevel: number
+  solarProduction: number
 }
 
 // ----------------- HELPERS -----------------
@@ -307,7 +320,7 @@ export default function Dashboard() {
     carbonSavedTons: 2.4,
   })
 
-  // auth
+  // ----------------- AUTH -----------------
   useEffect(() => {
     const authData = localStorage.getItem("user_profile")
     if (!authData) {
@@ -316,6 +329,62 @@ export default function Dashboard() {
       setIsAuthenticated(true)
     }
   }, [router])
+
+  // ----------------- RESTORE STATE FROM LOCALSTORAGE -----------------
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) {
+        console.log("[Storage] No stored dashboard state, using defaults.")
+        return
+      }
+      const parsed = JSON.parse(raw) as StoredDashboardState
+      console.log("[Storage] Restored dashboard state from localStorage:", parsed)
+
+      if (parsed.chartSeries && parsed.chartSeries.length) {
+        setChartSeries(parsed.chartSeries)
+        setChartSource(parsed.chartSource ?? "static")
+      }
+      if (parsed.kpis) {
+        setKpis(parsed.kpis)
+      }
+      if (parsed.csvPrediction) {
+        setCsvPrediction(parsed.csvPrediction)
+      }
+      if (typeof parsed.batteryLevel === "number") {
+        setBatteryLevel(parsed.batteryLevel)
+      }
+      if (typeof parsed.solarProduction === "number") {
+        setSolarProduction(parsed.solarProduction)
+      }
+    } catch (e) {
+      console.error("[Storage] Failed to restore dashboard state:", e)
+    }
+  }, [isAuthenticated])
+
+  // ----------------- PERSIST STATE TO LOCALSTORAGE -----------------
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    // We store whenever there is either CSV chart data or a prediction
+    const stateToStore: StoredDashboardState = {
+      chartSeries,
+      chartSource,
+      kpis,
+      csvPrediction,
+      batteryLevel,
+      solarProduction,
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore))
+      // console.log("[Storage] Dashboard state saved:", stateToStore)
+    } catch (e) {
+      console.error("[Storage] Failed to save dashboard state:", e)
+    }
+  }, [isAuthenticated, chartSeries, chartSource, kpis, csvPrediction, batteryLevel, solarProduction])
 
   // log when chart source changes
   useEffect(() => {
@@ -387,6 +456,8 @@ export default function Dashboard() {
       efficiencyPct: 94.2,
       carbonSavedTons: 2.4,
     })
+    setBatteryLevel(0)
+    setSolarProduction(0)
 
     if (progressTimerRef.current) {
       clearInterval(progressTimerRef.current)
@@ -395,6 +466,14 @@ export default function Dashboard() {
 
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
+    }
+
+    // Clear persisted state
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+      console.log("[Storage] Cleared persisted dashboard state.")
+    } catch (e) {
+      console.error("[Storage] Failed to clear dashboard state:", e)
     }
 
     console.log("[24h Chart] Reset to static demo data after file deletion.")
